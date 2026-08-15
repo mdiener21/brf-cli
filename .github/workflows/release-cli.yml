@@ -24,6 +24,7 @@ jobs:
     if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     outputs:
+      should_release: ${{ steps.resolve.outputs.should_release }}
       tag: ${{ steps.resolve.outputs.tag }}
       ref: ${{ steps.resolve.outputs.ref }}
 
@@ -39,6 +40,7 @@ jobs:
         run: |
           set -euo pipefail
 
+          echo "should_release=false" >> "${GITHUB_OUTPUT}"
           tag=""
           ref=""
 
@@ -51,20 +53,21 @@ jobs:
           else
             sha="${{ github.event.workflow_run.head_sha }}"
             git fetch --tags origin
-            tag="$(git tag --points-at "${sha}" | sort -r | head -n1)"
+            tag="$(git for-each-ref --format='%(refname:short)' --sort=-creatordate --points-at "${sha}" refs/tags | head -n1)"
             ref="${sha}"
           fi
 
           if [[ -z "${tag}" ]]; then
-            echo "No tag resolved for this run."
-            exit 1
+            echo "No tag resolved for this run; release jobs will be skipped."
+            exit 0
           fi
 
+          echo "should_release=true" >> "${GITHUB_OUTPUT}"
           echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
           echo "ref=${ref}" >> "${GITHUB_OUTPUT}"
 
   build:
-    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    if: needs.prepare.outputs.should_release == 'true'
     runs-on: ubuntu-latest
     needs: prepare
     strategy:
@@ -135,7 +138,7 @@ jobs:
           if-no-files-found: error
 
   publish:
-    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    if: needs.prepare.outputs.should_release == 'true'
     runs-on: ubuntu-latest
     needs:
       - prepare
