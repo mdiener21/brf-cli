@@ -1,0 +1,50 @@
+name: Tag Main Push
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+concurrency:
+  group: tag-main-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  tag-main-push:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Create and push tag
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          timestamp="$(date -u +"%Y-%m-%d-%H%M")"
+          short_sha="$(git rev-parse --short=7 "$GITHUB_SHA")"
+          tag="${timestamp}-g${short_sha}"
+
+          if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
+            echo "Tag ${tag} already exists locally; skipping."
+            exit 0
+          fi
+
+          if git ls-remote --tags origin "refs/tags/${tag}" | grep -q "${tag}"; then
+            echo "Tag ${tag} already exists on origin; skipping."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git tag -a "${tag}" -m "Auto tag for ${GITHUB_SHA} on main"
+          git push origin "refs/tags/${tag}"
+
+          echo "Created tag: ${tag}"
