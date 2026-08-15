@@ -1,0 +1,188 @@
+name: Build and Publish CLI
+
+on:
+  push:
+    tags:
+      - "*"
+  workflow_run:
+    workflows:
+      - Tag Main Push
+    types:
+      - completed
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag to release (optional)
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.resolve.outputs.tag }}
+      ref: ${{ steps.resolve.outputs.ref }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve release tag and ref
+        id: resolve
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          tag=""
+          ref=""
+
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" && -n "${{ github.event.inputs.tag }}" ]]; then
+            tag="${{ github.event.inputs.tag }}"
+            ref="refs/tags/${tag}"
+          elif [[ "${GITHUB_EVENT_NAME}" == "push" ]]; then
+            tag="${GITHUB_REF_NAME}"
+            ref="${GITHUB_REF}"
+          else
+            sha="${{ github.event.workflow_run.head_sha }}"
+            git fetch --tags origin
+            tag="$(git tag --points-at "${sha}" | sort -r | head -n1)"
+            ref="${sha}"
+          fi
+
+          if [[ -z "${tag}" ]]; then
+            echo "No tag resolved for this run."
+            exit 1
+          fi
+
+          echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
+          echo "ref=${ref}" >> "${GITHUB_OUTPUT}"
+
+  build:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+          - goos: linux
+            goarch: arm64
+          - goos: windows
+            goarch: amd64
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.ref }}
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build and package archive
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mkdir -p dist
+
+          ext=""
+          archive_ext="tar.gz"
+          if [[ "${{ matrix.goos }}" == "windows" ]]; then
+            ext=".exe"
+            archive_ext="zip"
+          fi
+
+          archive_base="brf_${{ needs.prepare.outputs.tag }}_${{ matrix.goos }}_${{ matrix.goarch }}"
+          package_dir="${archive_base}"
+          mkdir -p "${package_dir}"
+
+          binary_path="${package_dir}/brf${ext}"
+
+          GOOS="${{ matrix.goos }}" \
+          GOARCH="${{ matrix.goarch }}" \
+          CGO_ENABLED=0 \
+          go build -trimpath -ldflags="-s -w" -o "${binary_path}" .
+
+          cp LICENSE "${package_dir}/LICENSE"
+
+          if [[ "${archive_ext}" == "zip" ]]; then
+            archive_path="dist/${archive_base}.zip"
+            zip -r -q "${archive_path}" "${package_dir}"
+          else
+            archive_path="dist/${archive_base}.tar.gz"
+            tar -czf "${archive_path}" "${package_dir}"
+          fi
+
+          rm -rf "${package_dir}"
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: brf-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: dist/*
+          if-no-files-found: error
+
+  publish:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    needs:
+      - prepare
+      - build
+
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Generate checksums and Homebrew snippet
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          tag="${{ needs.prepare.outputs.tag }}"
+
+          pushd dist >/dev/null
+          sha256sum brf_* > "brf_${tag}_checksums.txt"
+          popd >/dev/null
+
+          amd64_sha="$(awk '/linux_amd64.tar.gz$/ {print $1}' "dist/brf_${tag}_checksums.txt")"
+          arm64_sha="$(awk '/linux_arm64.tar.gz$/ {print $1}' "dist/brf_${tag}_checksums.txt")"
+
+          if [[ -z "${amd64_sha}" || -z "${arm64_sha}" ]]; then
+            echo "Missing linux checksum(s); expected amd64 and arm64 archives."
+            exit 1
+          fi
+
+          {
+            echo "# Homebrew formula snippet for ${tag}"
+            echo "on_linux do"
+            echo "  if Hardware::CPU.intel?"
+            echo "    url \"https://github.com/${GITHUB_REPOSITORY}/releases/download/${tag}/brf_${tag}_linux_amd64.tar.gz\""
+            echo "    sha256 \"${amd64_sha}\""
+            echo "  elsif Hardware::CPU.arm?"
+            echo "    url \"https://github.com/${GITHUB_REPOSITORY}/releases/download/${tag}/brf_${tag}_linux_arm64.tar.gz\""
+            echo "    sha256 \"${arm64_sha}\""
+            echo "  end"
+            echo "end"
+          } > "dist/homebrew_linux_${tag}.rb"
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.prepare.outputs.tag }}
+          generate_release_notes: true
+          files: dist/*
