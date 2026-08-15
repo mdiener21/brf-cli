@@ -8,6 +8,12 @@
 *.so
 *.dylib
 
+# Local CLI build artifact at repository root
+/brf
+
+# Local packaging output directory (if release artifacts are generated manually)
+/dist/
+
 # Test binary, built with `go test -c`
 *.test
 

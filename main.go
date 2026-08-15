@@ -12,7 +12,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const version = "0.3.0"
+const version = "0.4.0"
 
 type cleanupCommand struct {
 	name        string
@@ -41,10 +41,25 @@ func normalizeArgs(args []string) []string {
 		return args
 	}
 
-	if args[1] == "git" && args[2] == "cleanup" && args[3] == "-wk" {
-		normalized := append([]string(nil), args...)
-		normalized[3] = "worktrees"
-		return normalized
+	if args[1] == "git" && args[2] == "cleanup" {
+		shorthands := map[string]string{
+			"-wk":   "worktrees",
+			"-wkt":  "worktrees",
+			"-mb":   "merged-branches",
+			"-mbr":  "merged-branches",
+			"-rb":   "remove-branches",
+			"-rbr":  "remove-branches",
+			"-mwk":  "merged-worktrees",
+			"-mwkt": "merged-worktrees",
+			"-rwk":  "remove-worktrees",
+			"-rwkt": "remove-worktrees",
+		}
+
+		if expanded, ok := shorthands[args[3]]; ok {
+			normalized := append([]string(nil), args...)
+			normalized[3] = expanded
+			return normalized
+		}
 	}
 
 	return args
@@ -112,7 +127,7 @@ func newCleanupCmd() *cobra.Command {
 	))
 	cleanupCmd.AddCommand(newCleanupLeafCmd(
 		"worktrees",
-		"Show worktrees and merge status",
+		"List and show worktrees and merge status",
 		func(mainBranch string) error {
 			return printWorktreeStatus(os.Stdout, mainBranch)
 		},
