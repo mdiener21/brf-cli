@@ -1,6 +1,10 @@
 package main
 
-import "testing"
+import (
+	"bytes"
+	"strings"
+	"testing"
+)
 
 func TestParseWorktreesPorcelain(t *testing.T) {
 	output := "worktree /repo\nHEAD abc123\nbranch refs/heads/main\n\nworktree /repo/feature\nHEAD def456\nbranch refs/heads/feature\n"
@@ -32,70 +36,99 @@ func TestSortedCleanupCommands(t *testing.T) {
 	}
 }
 
+func TestGitHelpShowsFlattenedCommands(t *testing.T) {
+	cmd := newRootCmd()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"git", "--help"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("expected help to succeed, got %v", err)
+	}
+
+	help := out.String()
+	if !strings.Contains(help, "brf git [command]") {
+		t.Fatalf("expected git command usage, got:\n%s", help)
+	}
+	if !strings.Contains(help, "worktrees") {
+		t.Fatalf("expected worktrees command in help, got:\n%s", help)
+	}
+	if strings.Contains(help, strings.Join([]string{"git", "cleanup"}, " ")) {
+		t.Fatalf("expected help not to include old command group, got:\n%s", help)
+	}
+}
+
 func TestNormalizeArgs(t *testing.T) {
-	args := []string{"brf", "git", "cleanup", "-wk"}
+	args := []string{"brf", "git", "-wk"}
 	normalized := normalizeArgs(args)
-	if normalized[3] != "worktrees" {
-		t.Fatalf("expected shorthand to normalize to worktrees, got %q", normalized[3])
+	if normalized[2] != "worktrees" {
+		t.Fatalf("expected shorthand to normalize to worktrees, got %q", normalized[2])
 	}
 
-	args = []string{"brf", "git", "cleanup", "-wkt"}
+	args = []string{"brf", "git", "-wkt"}
 	normalized = normalizeArgs(args)
-	if normalized[3] != "worktrees" {
-		t.Fatalf("expected shorthand to normalize to worktrees, got %q", normalized[3])
+	if normalized[2] != "worktrees" {
+		t.Fatalf("expected shorthand to normalize to worktrees, got %q", normalized[2])
 	}
 
-	args = []string{"brf", "git", "cleanup", "-mb"}
+	args = []string{"brf", "g", "wkt"}
 	normalized = normalizeArgs(args)
-	if normalized[3] != "merged-branches" {
-		t.Fatalf("expected shorthand to normalize to merged-branches, got %q", normalized[3])
+	if normalized[1] != "git" || normalized[2] != "worktrees" {
+		t.Fatalf("expected g wkt to normalize to git worktrees, got %#v", normalized)
 	}
 
-	args = []string{"brf", "git", "cleanup", "-mbr"}
+	args = []string{"brf", "git", "-mb"}
 	normalized = normalizeArgs(args)
-	if normalized[3] != "merged-branches" {
-		t.Fatalf("expected shorthand to normalize to merged-branches, got %q", normalized[3])
+	if normalized[2] != "merged-branches" {
+		t.Fatalf("expected shorthand to normalize to merged-branches, got %q", normalized[2])
 	}
 
-	args = []string{"brf", "git", "cleanup", "-rb"}
+	args = []string{"brf", "git", "-mbr"}
 	normalized = normalizeArgs(args)
-	if normalized[3] != "remove-branches" {
-		t.Fatalf("expected shorthand to normalize to remove-branches, got %q", normalized[3])
+	if normalized[2] != "merged-branches" {
+		t.Fatalf("expected shorthand to normalize to merged-branches, got %q", normalized[2])
 	}
 
-	args = []string{"brf", "git", "cleanup", "-rbr"}
+	args = []string{"brf", "git", "-rb"}
 	normalized = normalizeArgs(args)
-	if normalized[3] != "remove-branches" {
-		t.Fatalf("expected shorthand to normalize to remove-branches, got %q", normalized[3])
+	if normalized[2] != "remove-branches" {
+		t.Fatalf("expected shorthand to normalize to remove-branches, got %q", normalized[2])
 	}
 
-	args = []string{"brf", "git", "cleanup", "-mwk"}
+	args = []string{"brf", "git", "-rbr"}
 	normalized = normalizeArgs(args)
-	if normalized[3] != "merged-worktrees" {
-		t.Fatalf("expected shorthand to normalize to merged-worktrees, got %q", normalized[3])
+	if normalized[2] != "remove-branches" {
+		t.Fatalf("expected shorthand to normalize to remove-branches, got %q", normalized[2])
 	}
 
-	args = []string{"brf", "git", "cleanup", "-mwkt"}
+	args = []string{"brf", "git", "-mwk"}
 	normalized = normalizeArgs(args)
-	if normalized[3] != "merged-worktrees" {
-		t.Fatalf("expected shorthand to normalize to merged-worktrees, got %q", normalized[3])
+	if normalized[2] != "merged-worktrees" {
+		t.Fatalf("expected shorthand to normalize to merged-worktrees, got %q", normalized[2])
 	}
 
-	args = []string{"brf", "git", "cleanup", "-rwk"}
+	args = []string{"brf", "git", "-mwkt"}
 	normalized = normalizeArgs(args)
-	if normalized[3] != "remove-worktrees" {
-		t.Fatalf("expected shorthand to normalize to remove-worktrees, got %q", normalized[3])
+	if normalized[2] != "merged-worktrees" {
+		t.Fatalf("expected shorthand to normalize to merged-worktrees, got %q", normalized[2])
 	}
 
-	args = []string{"brf", "git", "cleanup", "-rwkt"}
+	args = []string{"brf", "git", "-rwk"}
 	normalized = normalizeArgs(args)
-	if normalized[3] != "remove-worktrees" {
-		t.Fatalf("expected shorthand to normalize to remove-worktrees, got %q", normalized[3])
+	if normalized[2] != "remove-worktrees" {
+		t.Fatalf("expected shorthand to normalize to remove-worktrees, got %q", normalized[2])
 	}
 
-	nonShortcut := []string{"brf", "git", "cleanup", "worktree"}
+	args = []string{"brf", "git", "-rwkt"}
+	normalized = normalizeArgs(args)
+	if normalized[2] != "remove-worktrees" {
+		t.Fatalf("expected shorthand to normalize to remove-worktrees, got %q", normalized[2])
+	}
+
+	nonShortcut := []string{"brf", "git", "worktree"}
 	normalized = normalizeArgs(nonShortcut)
-	if normalized[3] != "worktree" {
-		t.Fatalf("expected non-shortcut argument to remain unchanged, got %q", normalized[3])
+	if normalized[2] != "worktree" {
+		t.Fatalf("expected non-shortcut argument to remain unchanged, got %q", normalized[2])
 	}
 }

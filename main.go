@@ -12,7 +12,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const version = "0.4.0"
+const version = "0.5.0"
 
 type cleanupCommand struct {
 	name        string
@@ -37,14 +37,21 @@ func main() {
 }
 
 func normalizeArgs(args []string) []string {
-	if len(args) < 4 {
+	if len(args) < 3 {
 		return args
 	}
 
-	if args[1] == "git" && args[2] == "cleanup" {
+	if args[1] == "g" {
+		normalized := append([]string(nil), args...)
+		normalized[1] = "git"
+		args = normalized
+	}
+
+	if args[1] == "git" {
 		shorthands := map[string]string{
 			"-wk":   "worktrees",
 			"-wkt":  "worktrees",
+			"wkt":   "worktrees",
 			"-mb":   "merged-branches",
 			"-mbr":  "merged-branches",
 			"-rb":   "remove-branches",
@@ -55,9 +62,9 @@ func normalizeArgs(args []string) []string {
 			"-rwkt": "remove-worktrees",
 		}
 
-		if expanded, ok := shorthands[args[3]]; ok {
+		if expanded, ok := shorthands[args[2]]; ok {
 			normalized := append([]string(nil), args...)
-			normalized[3] = expanded
+			normalized[2] = expanded
 			return normalized
 		}
 	}
@@ -97,35 +104,30 @@ func newRootCmd() *cobra.Command {
 }
 
 func newGitCmd() *cobra.Command {
-	gitCmd := &cobra.Command{Use: "git"}
-	gitCmd.AddCommand(newCleanupCmd())
-	return gitCmd
-}
-
-func newCleanupCmd() *cobra.Command {
-	cleanupCmd := &cobra.Command{
-		Use:   "cleanup",
-		Short: "Git cleanup utilities",
+	gitCmd := &cobra.Command{
+		Use:     "git",
+		Aliases: []string{"g"},
+		Short:   "Git utilities",
 		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Fprintln(cmd.OutOrStdout(), "Usage: brf git cleanup <command>")
+			fmt.Fprintln(cmd.OutOrStdout(), "Usage: brf git <command>")
 		},
 	}
 
-	cleanupCmd.AddCommand(newCleanupLeafCmd(
+	gitCmd.AddCommand(newCleanupLeafCmd(
 		"merged-branches",
 		"List local branches fully merged into the main branch",
 		func(mainBranch string) error {
 			return listMergedBranches(os.Stdout, mainBranch)
 		},
 	))
-	cleanupCmd.AddCommand(newCleanupLeafCmd(
+	gitCmd.AddCommand(newCleanupLeafCmd(
 		"remove-branches",
 		"Delete local branches fully merged into the main branch",
 		func(mainBranch string) error {
 			return removeMergedBranches(mainBranch)
 		},
 	))
-	cleanupCmd.AddCommand(newCleanupLeafCmd(
+	gitCmd.AddCommand(newCleanupLeafCmd(
 		"worktrees",
 		"List and show worktrees and merge status",
 		func(mainBranch string) error {
@@ -133,22 +135,23 @@ func newCleanupCmd() *cobra.Command {
 		},
 		"worktree",
 		"wk",
+		"wkt",
 	))
-	cleanupCmd.AddCommand(newCleanupLeafCmd(
+	gitCmd.AddCommand(newCleanupLeafCmd(
 		"merged-worktrees",
 		"List worktrees fully merged into the main branch",
 		func(mainBranch string) error {
 			return printMergedWorktrees(os.Stdout, mainBranch)
 		},
 	))
-	cleanupCmd.AddCommand(newCleanupLeafCmd(
+	gitCmd.AddCommand(newCleanupLeafCmd(
 		"remove-worktrees",
 		"Remove worktrees fully merged into the main branch",
 		func(mainBranch string) error {
 			return removeMergedWorktrees(mainBranch)
 		},
 	))
-	cleanupCmd.AddCommand(newCleanupLeafCmd(
+	gitCmd.AddCommand(newCleanupLeafCmd(
 		"prune",
 		"Prune stale Git worktree metadata",
 		func(mainBranch string) error {
@@ -157,7 +160,7 @@ func newCleanupCmd() *cobra.Command {
 		},
 	))
 
-	return cleanupCmd
+	return gitCmd
 }
 
 func newCleanupLeafCmd(use, short string, runner func(mainBranch string) error, aliases ...string) *cobra.Command {
@@ -181,7 +184,7 @@ func newCleanupLeafCmd(use, short string, runner func(mainBranch string) error, 
 				os.Exit(exitErr.ExitCode())
 			}
 
-			return fmt.Errorf("brf git cleanup: %v", err)
+			return fmt.Errorf("brf git: %v", err)
 		},
 	}
 }
@@ -189,7 +192,8 @@ func newCleanupLeafCmd(use, short string, runner func(mainBranch string) error, 
 func usage(w io.Writer) {
 	fmt.Fprintf(w, "brf %s\n\n", version)
 	fmt.Fprintln(w, "Usage:")
-	fmt.Fprintln(w, "  brf git cleanup <command>")
+	fmt.Fprintln(w, "  brf git <command>")
+	fmt.Fprintln(w, "  brf g <command>")
 	fmt.Fprintln(w, "  brf help")
 	fmt.Fprintln(w, "  brf --version")
 	fmt.Fprintln(w, "\nCommands:")

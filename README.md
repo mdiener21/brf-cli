@@ -5,21 +5,23 @@ The cleanup commands are implemented in Go and call `git` directly; there is no 
 
 ## First commands
 
-The first slice wraps the existing `git-cleanup.sh` commands:
+The first slice provides Git cleanup helpers:
 
 ```bash
-brf git cleanup merged-branches
-brf git cleanup -mb
-brf git cleanup remove-branches
-brf git cleanup -rb
-brf git cleanup worktrees
-brf git cleanup worktree
-brf git cleanup wk
-brf git cleanup -wk
-brf git cleanup -wkt
-brf git cleanup merged-worktrees
-brf git cleanup remove-worktrees
-brf git cleanup prune
+brf git merged-branches
+brf git -mb
+brf git remove-branches
+brf git -rb
+brf git worktrees
+brf git worktree
+brf git wk
+brf git wkt
+brf git -wk
+brf git -wkt
+brf g wkt
+brf git merged-worktrees
+brf git remove-worktrees
+brf git prune
 ```
 
 ## Help
@@ -29,8 +31,9 @@ Every command supports help flags from Cobra:
 ```bash
 brf --help
 brf -h
-brf git cleanup --help
-brf git cleanup -h
+brf git --help
+brf git -h
+brf g --help
 ```
 
 ## Build Locally (from source)

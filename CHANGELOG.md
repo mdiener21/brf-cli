@@ -7,6 +7,11 @@ and this project follows Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-08-15
+### Changed
+- Flattened Git cleanup helpers from `brf git <group> <command>` to `brf git <command>` and `brf g <command>`.
+- Added `brf g wkt` as a short form for listing worktrees.
+
 ## [0.4.0] - 2026-08-15
 ### Added
 - Added additional cleanup command shorthands:
