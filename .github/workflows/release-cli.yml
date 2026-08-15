@@ -2,13 +2,10 @@ name: Build and Publish CLI
 
 on:
   push:
+    branches:
+      - main
     tags:
       - "*"
-  workflow_run:
-    workflows:
-      - Tag Main Push
-    types:
-      - completed
   workflow_dispatch:
     inputs:
       tag:
@@ -21,7 +18,6 @@ permissions:
 
 jobs:
   prepare:
-    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     outputs:
       should_release: ${{ steps.resolve.outputs.should_release }}
@@ -47,17 +43,29 @@ jobs:
           if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" && -n "${{ github.event.inputs.tag }}" ]]; then
             tag="${{ github.event.inputs.tag }}"
             ref="refs/tags/${tag}"
-          elif [[ "${GITHUB_EVENT_NAME}" == "push" ]]; then
+          elif [[ "${GITHUB_EVENT_NAME}" == "push" && "${GITHUB_REF_TYPE}" == "tag" ]]; then
             tag="${GITHUB_REF_NAME}"
             ref="${GITHUB_REF}"
-          else
-            sha="${{ github.event.workflow_run.head_sha }}"
-            git fetch --tags origin
-            tag="$(git for-each-ref --format='%(refname:short)' --sort=-creatordate --points-at "${sha}" refs/tags | head -n1)"
+          elif [[ "${GITHUB_EVENT_NAME}" == "push" && "${GITHUB_REF}" == "refs/heads/main" ]]; then
+            sha="${GITHUB_SHA}"
 
-            # Fallback for annotated tags created by Tag Main Push when points-at lookup returns nothing.
-            if [[ -z "${tag}" ]]; then
-              tag="$(git for-each-ref refs/tags --sort=-creatordate --format='%(refname:short)|%(contents)' | awk -F'|' -v sha="${sha}" '$2 ~ "Auto tag for " sha " on main" {print $1; exit}')"
+            git fetch --tags origin
+
+            mapfile -t matching_tags < <(git tag --sort=-creatordate --points-at "${sha}")
+            if [[ "${#matching_tags[@]}" -gt 0 ]]; then
+              tag="${matching_tags[0]}"
+            else
+              timestamp="$(date -u +"%Y-%m-%d-%H%M")"
+              short_sha="$(git rev-parse --short=7 "${sha}")"
+              tag="${timestamp}-g${short_sha}"
+
+              if ! git ls-remote --exit-code --tags origin "refs/tags/${tag}" >/dev/null 2>&1; then
+                git config user.name "github-actions[bot]"
+                git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+                git tag -a "${tag}" -m "Auto tag for ${sha} on main" "${sha}"
+                git push origin "refs/tags/${tag}"
+              fi
             fi
 
             ref="${sha}"
