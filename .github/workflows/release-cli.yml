@@ -54,6 +54,12 @@ jobs:
             sha="${{ github.event.workflow_run.head_sha }}"
             git fetch --tags origin
             tag="$(git for-each-ref --format='%(refname:short)' --sort=-creatordate --points-at "${sha}" refs/tags | head -n1)"
+
+            # Fallback for annotated tags created by Tag Main Push when points-at lookup returns nothing.
+            if [[ -z "${tag}" ]]; then
+              tag="$(git for-each-ref refs/tags --sort=-creatordate --format='%(refname:short)|%(contents)' | awk -F'|' -v sha="${sha}" '$2 ~ "Auto tag for " sha " on main" {print $1; exit}')"
+            fi
+
             ref="${sha}"
           fi
 
