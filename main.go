@@ -12,7 +12,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const version = "0.5.0"
+var version = "0.5.0"
 
 type cleanupCommand struct {
 	name        string
@@ -73,7 +73,12 @@ func normalizeArgs(args []string) []string {
 }
 
 func newRootCmd() *cobra.Command {
+	return newRootCmdWithUpgrade(runUpgrade)
+}
+
+func newRootCmdWithUpgrade(run upgradeFunc) *cobra.Command {
 	var showVersion bool
+	var upgrade bool
 
 	rootCmd := &cobra.Command{
 		Use:           "brf",
@@ -85,12 +90,16 @@ func newRootCmd() *cobra.Command {
 				fmt.Fprintln(cmd.OutOrStdout(), version)
 				return nil
 			}
+			if upgrade {
+				return executeUpgrade(cmd, version, run)
+			}
 			usage(cmd.OutOrStdout())
 			return nil
 		},
 	}
 
 	rootCmd.Flags().BoolVarP(&showVersion, "version", "v", false, "Print version information")
+	rootCmd.Flags().BoolVar(&upgrade, "upgrade", false, "Upgrade brf to the latest release")
 	rootCmd.AddCommand(&cobra.Command{
 		Use:   "version",
 		Short: "Print version information",
@@ -98,6 +107,7 @@ func newRootCmd() *cobra.Command {
 			fmt.Fprintln(cmd.OutOrStdout(), version)
 		},
 	})
+	rootCmd.AddCommand(newUpgradeCmd(version, run))
 	rootCmd.AddCommand(newGitCmd())
 
 	return rootCmd
@@ -196,6 +206,7 @@ func usage(w io.Writer) {
 	fmt.Fprintln(w, "  brf g <command>")
 	fmt.Fprintln(w, "  brf help")
 	fmt.Fprintln(w, "  brf --version")
+	fmt.Fprintln(w, "  brf upgrade")
 	fmt.Fprintln(w, "\nCommands:")
 	for _, command := range sortedCleanupCommands() {
 		fmt.Fprintf(w, "  %-18s %s\n", command.name, command.description)

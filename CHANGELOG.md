@@ -6,6 +6,12 @@ The format is based on Keep a Changelog,
 and this project follows Semantic Versioning.
 
 ## [Unreleased]
+### Added
+- Add self-upgrade support through `brf upgrade`, `brf update`, and `brf --upgrade`.
+- Verify release checksums before replacing the current executable.
+
+### Changed
+- Embed the release tag in published binaries so upgrade checks identify the installed release correctly.
 
 ## [0.5.0] - 2026-08-15
 ### Changed

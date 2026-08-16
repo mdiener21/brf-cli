@@ -36,6 +36,18 @@ brf git -h
 brf g --help
 ```
 
+## Upgrade
+
+Upgrade the currently running binary to the latest GitHub release:
+
+```bash
+brf upgrade
+brf update
+brf --upgrade
+```
+
+The updater selects the release artifact for the current operating system and architecture, verifies its SHA-256 checksum, and replaces the current `brf` or `brf.exe` executable. The executable directory must be writable by the current user.
+
 ## Build Locally (from source)
 
 From the repository root:
