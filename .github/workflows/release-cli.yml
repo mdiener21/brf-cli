@@ -126,11 +126,13 @@ jobs:
           mkdir -p "${package_dir}"
 
           binary_path="${package_dir}/brf${ext}"
+          version="${{ needs.prepare.outputs.tag }}"
+          version="${version#v}"
 
           GOOS="${{ matrix.goos }}" \
           GOARCH="${{ matrix.goarch }}" \
           CGO_ENABLED=0 \
-          go build -trimpath -ldflags="-s -w" -o "${binary_path}" .
+          go build -trimpath -ldflags="-s -w -X main.version=${version}" -o "${binary_path}" .
 
           cp LICENSE "${package_dir}/LICENSE"
 
