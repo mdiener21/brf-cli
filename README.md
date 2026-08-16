@@ -3,6 +3,9 @@
 `brf` is a tiny personal Go CLI for quick repo cleanup and later brief repo overviews.
 The cleanup commands are implemented in Go and call `git` directly; there is no dependency on `git-cleanup.sh` anymore.
 
+<img width="1408" height="768" alt="brf-logo" src="https://github.com/user-attachments/assets/8c15efd8-16b3-4c2c-ab04-837c864aa97b" />
+
+
 ## First commands
 
 The first slice provides Git cleanup helpers:
